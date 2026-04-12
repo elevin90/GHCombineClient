@@ -159,6 +159,15 @@ enum APIServiceError: Error {
 
 /// Concrete implementation of `APIService` backed by `URLSession` requests to the GitHub API.
 final class GitHubAPIService: APIService {
+    
+    /// Decoder for GitHub models
+    lazy var decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+    
   /// Searches users via the GitHub Search API.
   /// - Parameter query: The search string.
   /// - Returns: A publisher emitting matching users or failing with an error.
@@ -176,7 +185,7 @@ final class GitHubAPIService: APIService {
         }
         return output.data
       }
-      .decode(type: Response.self, decoder: JSONDecoder())
+      .decode(type: Response.self, decoder: decoder)
       .map { $0.items }
       .eraseToAnyPublisher()
   }
@@ -191,10 +200,6 @@ final class GitHubAPIService: APIService {
       return Fail(error: APIServiceError.badURL)
         .eraseToAnyPublisher()
     }
-
-    let decoder = JSONDecoder()
-    decoder.keyDecodingStrategy = .convertFromSnakeCase
-    decoder.dateDecodingStrategy = .iso8601
 
     return URLSession.shared
       .dataTaskPublisher(for: url)
@@ -229,8 +234,6 @@ final class GitHubAPIService: APIService {
       return Fail(error: URLError(.badURL))
         .eraseToAnyPublisher()
     }
-    let decoder = JSONDecoder()
-    decoder.keyDecodingStrategy = .convertFromSnakeCase
   
     return URLSession.shared
       .dataTaskPublisher(for: url)
@@ -253,9 +256,6 @@ final class GitHubAPIService: APIService {
       return Fail(error: APIServiceError.badURL)
         .eraseToAnyPublisher()
     }
-
-    let decoder = JSONDecoder()
-    decoder.keyDecodingStrategy = .convertFromSnakeCase
     
     return URLSession.shared.dataTaskPublisher(for: url)
       .tryMap { output in
