@@ -177,6 +177,12 @@ struct ProfileDetailsView: View {
 
 #if DEBUG
 private struct MockAPIService: APIService {
+  func searchUsers(query: String, page: Int) -> AnyPublisher<[GithubUser], any Error> {
+    Just([GithubUser(id: 1, login: "", avatar_url: "")])
+      .setFailureType(to: Error.self)
+      .eraseToAnyPublisher()
+  }
+  
   func getFollowers(for user: String) -> AnyPublisher<[Follower], APIServiceError> {
     Just([Follower.preview, Follower.preview2])
       .setFailureType(to: APIServiceError.self)
@@ -186,12 +192,6 @@ private struct MockAPIService: APIService {
   func getRepositories(for user: String, page: Int) -> AnyPublisher<[Repository], APIServiceError> {
     Just([Repository.preview] )
       .setFailureType(to: APIServiceError.self)
-      .eraseToAnyPublisher()
-  }
-  
-  func searchUsers(query: String) -> AnyPublisher<[GithubUser], any Error> {
-    Just([GithubUser(id: 1, login: "", avatar_url: "")])
-      .setFailureType(to: Error.self)
       .eraseToAnyPublisher()
   }
   

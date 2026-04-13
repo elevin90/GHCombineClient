@@ -36,7 +36,7 @@ struct User {
 /// Represents GitHub API endpoints used by the app.
 /// Builds URLs for searching users, fetching a user profile, followers and listing repositories.
 enum Endpoint {
-  case searchUsers(query: String)
+  case searchUsers(query: String, page: Int, perPage: Int = 20)
   case userProfile(userName: String)
   case userRepositories(userName: String, page: Int = 1, perPage: Int = 20)
   case userFollowers(userName: String)
@@ -49,9 +49,13 @@ enum Endpoint {
     components.host = "api.github.com"
     
     switch self {
-    case .searchUsers(let query):
+    case .searchUsers(let query, let page, let perPage):
       components.path = "/search/users"
-      components.queryItems = [URLQueryItem(name: "q", value: query)]
+      components.queryItems = [
+        URLQueryItem(name: "q", value: query),
+        URLQueryItem(name: "page", value: "\(page)"),
+        URLQueryItem(name: "per_page", value: "\(perPage)")
+      ]
     case .userProfile(let userName):
       components.path = "/users/\(userName)"
     case .userRepositories(let userName, let page, let perPage):
@@ -94,6 +98,8 @@ struct GithubUser: Identifiable, Decodable {
   let avatar_url: String
 }
 
+extension GithubUser: Equatable { }
+
 /// Top-level response container for GitHub user search.
 struct Response: Decodable {
   let items: [GithubUser]
@@ -129,7 +135,7 @@ protocol APIService {
   /// Searches GitHub users by a query string.
   /// - Parameter query: The text to search for.
   /// - Returns: A publisher emitting an array of matching `GithubUser` or failing with `Error`.
-  func searchUsers(query: String) -> AnyPublisher<[GithubUser], Error>
+  func searchUsers(query: String, page: Int) -> AnyPublisher<[GithubUser], Error>
   
   /// Fetches the profile for a given GitHub username.
   /// - Parameter user: The GitHub username.
@@ -171,8 +177,8 @@ final class GitHubAPIService: APIService {
   /// Searches users via the GitHub Search API.
   /// - Parameter query: The search string.
   /// - Returns: A publisher emitting matching users or failing with an error.
-  func searchUsers(query: String) -> AnyPublisher<[GithubUser], Error> {
-    guard let url = Endpoint.searchUsers(query: query).url else {
+  func searchUsers(query: String, page: Int) -> AnyPublisher<[GithubUser], Error> {
+    guard let url = Endpoint.searchUsers(query: query, page: page).url else {
       return Fail(error: URLError(.badURL))
         .eraseToAnyPublisher()
     }
@@ -185,7 +191,7 @@ final class GitHubAPIService: APIService {
         }
         return output.data
       }
-      .decode(type: Response.self, decoder: decoder)
+      .decode(type: Response.self, decoder: JSONDecoder())
       .map { $0.items }
       .eraseToAnyPublisher()
   }

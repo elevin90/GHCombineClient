@@ -33,6 +33,16 @@ struct ErrorViewData {
   let description: String?
 }
 
+extension ErrorViewData {
+    /// Compact init method
+    /// - Parameter title: Error string to display
+    init(title: String) {
+        self.title = title
+        self.image = nil
+        self.description = nil
+    }
+}
+
 /// A SwiftUI view that renders an error message using a compact or large style.
 struct ErrorView: View {
   /// Controls whether the view renders in `.compact` or `.large` mode.

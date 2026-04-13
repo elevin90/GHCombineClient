@@ -30,7 +30,7 @@ struct FollowersListView: View {
     switch state {
     case .idle:
       EmptyView()
-      
+            .padding(.vertical)
     case .loading:
       ProgressView()
         .frame(maxWidth: .infinity)
@@ -58,7 +58,12 @@ struct FollowersListView: View {
     )
   }
   
-  private func followersRow(_ followers: [Follower]) -> some View {
+  /// Creates a view for the first 5 folloewrs
+  /// - Parameter followers: Followers array
+  /// - Returns: A view for the first 5 folloewrs
+  private func followersRow(
+    _ followers: [Follower]
+  ) -> some View {
     HStack {
       ForEach(followers.prefix(5), id: \.id) { follower in
         Spacer()
@@ -68,6 +73,7 @@ struct FollowersListView: View {
       Spacer()
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.vertical)
   }
   
   @ViewBuilder

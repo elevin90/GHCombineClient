@@ -51,7 +51,7 @@ private struct RepositoriesContentView: View {
   let state: Loadable<[Repository]>
   
   /// Single fixed-height row configuration for the horizontal grid.
-  private static let gridRows = [GridItem(.fixed(180))]
+  private static let gridRows = [GridItem(.fixed(118))]
   
   /// Switches on the `state` to show a spinner, error, empty state, or the repositories grid.
   var body: some View {
@@ -59,17 +59,17 @@ private struct RepositoriesContentView: View {
       switch state {
       case .idle:
         EmptyView()
-        
       case .loading:
-        ProgressView()
-          .frame(maxWidth: .infinity)
-        
+        ProgressView().frame(maxWidth: .infinity)
       case .error:
         errorView
-        
       case .loaded(let repositories):
         if repositories.isEmpty {
-          emptyView
+          ErrorView(
+            mode: .compact,
+            data: .init(title: "No Repositories found")
+          )
+          .padding(.vertical)
         } else {
           repositoriesGrid(repositories)
         }
