@@ -297,5 +297,5 @@ enum Loadable<Value> {
 
 struct SearchState {
   var searchText: String = ""
-  var state: Loadable<[GithubUser]> = .idle
+  var results: Loadable<[GithubUser]> = .idle
 }

@@ -8,140 +8,204 @@
 import Foundation
 import Combine
 
-enum Action {
+/// Represents user-driven intents.
+private enum Action {
   case searchChanged(String)
   case loadNextPage
-  case setState(Loadable<[GithubUser]>)
-  case reset
+  case cancel
 }
 
-/// A view model is used to operate UserSearch view logic
+/// ViewModel responsible for searching GitHub users with pagination.
+/// Implements a unidirectional data flow using Combine.
 final class UserSearchViewModel: ObservableObject {
-  /// Backing view state for the User Search screen.
-  /// Contains the current `searchText` and a `Loadable<[GithubUser]>` representing the results.
+  
+  // MARK: - Public State
+  
+  /// Full UI state consumed by SwiftUI
   @Published var state = SearchState()
   
-  /// A signal used to cancel any in-flight search request.
-  /// Emitted when the user clears the search field or calls `cancel()`.
-  private let cancelTapped = PassthroughSubject<Void, Never>()
+  /// Indicates whether pagination request is in progress
+  @Published private(set) var isLoadingNextPage = false
   
-  private var currentPage = 1
-  private var hasMorePages = false
+  // MARK: - Dependencies
   
-  /// Abstraction over the GitHub API used to search for users.
-  /// Default implementation is `GitHubAPIService`.
+  /// API service used for fetching GitHub users
   let api: APIService
   
-  /// Storage for Combine subscriptions created by this view model.
+  // MARK: - Private State
+  
+  /// Internal action stream
+  private let action = PassthroughSubject<Action, Never>()
+  
+  /// Combine cancellables
   private var cancellables = Set<AnyCancellable>()
   
-  /// Creates a new instance of `UserSearchViewModel`.
-  /// - Parameter api: The service used to perform API requests. Defaults to `GitHubAPIService`.
-  /// Automatically binds the Combine pipeline to react to search text changes.
+  /// Current page index (starts from 1)
+  private var currentPage = 1
+  
+  /// Indicates if more pages are available
+  private var hasMorePages = true
+  
+  // MARK: - Init
+  
+  /// Initializes ViewModel with API dependency
+  /// - Parameter api: Service for fetching GitHub users
   init(api: APIService = GitHubAPIService()) {
     self.api = api
     bind()
   }
   
-  /// Wires up the Combine pipeline that observes search text changes and performs debounced searches.
+  // MARK: - Binding
+  
+  /// Binds user input and actions into a reactive pipeline.
+  /// Converts UI events into side effects and state updates.
   private func bind() {
-    // Minimum number of characters required before a search is triggered.
-    let minimalCharactersCount = 2
+    bindSearchInput()
+    bindActions()
+  }
+  
+  /// Observes search text changes and emits corresponding actions.
+  private func bindSearchInput() {
+    let minimalTextLength = 2
     $state
-    // Observe the search text from the view state.
-    // Extract just the `searchText` field to observe.
       .map(\.searchText)
-    // Wait for 500ms pauses in typing before searching to reduce API calls.
       .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
-    // Ignore repeated identical queries.
       .removeDuplicates()
-    // If the user clears the text, cancel the current search and reset state.
-      .handleEvents(receiveOutput: { [weak self] text in
-        if text.isEmpty {
-          self?.cancel()
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .sink { [weak self] text in
+        guard let self else { return }
+        
+        switch text.count {
+        case .zero:
+          action.send(.cancel)
+        case minimalTextLength...:
+          action.send(.searchChanged(text))
+        default:
+          break
         }
-      })
-    // Trim leading/trailing whitespace before searching.
-      .map { $0.trimmingCharacters(in: .whitespaces) }
-    // Only search when the query has enough characters.
-      .filter { $0.count >= minimalCharactersCount }
-    // Transform the query into a `Loadable`-emitting publisher that performs the network request.
-      .map { [weak self] query -> AnyPublisher<Loadable<[GithubUser]>, Never> in
-        // If the view model has been deallocated, emit an idle state and stop.
+      }
+      .store(in: &cancellables)
+  }
+  
+  /// Main action processing pipeline.
+  /// Maps actions into side-effect publishers and updates state.
+  private func bindActions() {
+    action
+      .map { [weak self] action -> AnyPublisher<Loadable<[GithubUser]>, Never> in
         guard let self else {
           return Just(.idle).eraseToAnyPublisher()
         }
-        currentPage = 1
-        hasMorePages = true
-        // Preserve previously loaded users to display while a new request is loading.
-        let previousUsers: [GithubUser]? = {
-          if case .loaded(let users) = self.state.state {
-            return users
-          }
-          return nil
-        }()
-        
-        // Update UI state to loading, keeping the previous value if available.
-        self.state.state = .loading(previousValue: previousUsers)
-        
-        // Kick off the API request for users matching the query.
-        return self.api.searchUsers(query: query, page: currentPage)
-        // Wrap the successful result in a Loadable.loaded value.
-          .map { Loadable.loaded($0) }
-        // Convert any error into a non-failing Loadable.error publisher.
-          .catch { error in
-            Just(Loadable.error(error: error))
-          }
-        // Cancel this request if a cancel signal arrives (e.g., user cleared the text).
-          .prefix(untilOutputFrom: self.cancelTapped)
-          .eraseToAnyPublisher()
+
+        return switch action {
+        case .searchChanged(let query):
+           makeSearchPublisher(query: query)
+        case .loadNextPage:
+           makeNextPagePublisher()
+        case .cancel:
+           makeResetPublisher()
+        }
       }
-    // Only keep the most recent search; cancel prior in-flight requests.
       .switchToLatest()
-    // Ensure UI updates happen on the main thread.
       .receive(on: DispatchQueue.main)
-    // Apply the new loadable state to the view state.
-      .sink { [weak self] loadable in
-        self?.state.state = loadable
+      .sink { [weak self] newValue in
+        self?.state.results = newValue
       }
-    // Retain the subscription for the lifetime of the view model.
       .store(in: &cancellables)
   }
   
+  // MARK: - Public API
+  
+  /// Requests loading of the next page (pagination trigger).
   func loadNextPage() {
-    guard hasMorePages else { return }
-    guard case .loaded(let current) = state.state else { return }
+    action.send(.loadNextPage)
+  }
+  
+  /// Cancels current search and resets state.
+  func cancel() {
+    action.send(.cancel)
+  }
+  
+  // MARK: - Publishers
+  
+  /// Creates a publisher for performing a new search request.
+  /// - Parameter query: Search query string
+  private func makeSearchPublisher(query: String) -> AnyPublisher<Loadable<[GithubUser]>, Never> {
+    
+    resetPagination()
+    
+    let previousUsers = currentUsers
+    
+    return api.searchUsers(query: query, page: currentPage)
+      .map { Loadable.loaded($0) }
+      .prepend(.loading(previousValue: previousUsers))
+      .catch { Just(Loadable.error(error: $0)) }
+      .eraseToAnyPublisher()
+  }
+  
+  /// Creates a publisher for loading the next page.
+  private func makeNextPagePublisher() -> AnyPublisher<Loadable<[GithubUser]>, Never> {
+    
+    guard canLoadNextPage else {
+      return Empty().eraseToAnyPublisher()
+    }
+    
+    isLoadingNextPage = true
     
     let nextPage = currentPage + 1
+    let existingUsers = currentUsers ?? []
     
-    api.searchUsers(query: state.searchText, page: nextPage)
-      .receive(on: DispatchQueue.main)
-      .sink { [weak self] completion in
-
-        if case .failure(let error) = completion {
-          self?.state.state = .error(error: error)
-        }
-      } receiveValue: { [weak self] response in
-        guard let self else { return }
-        let newUsers = response
+    return api.searchUsers(query: state.searchText, page: nextPage)
+      .map { [weak self] newUsers -> Loadable<[GithubUser]> in
+        guard let self else { return .loaded(existingUsers) }
         
         if newUsers.isEmpty {
           self.hasMorePages = false
-          return
+          return .loaded(existingUsers)
         }
         
         self.currentPage = nextPage
-        self.state.state = .loaded(current + newUsers)
+        return .loaded(existingUsers + newUsers)
       }
-      .store(in: &cancellables)
+      .catch { Just(Loadable.error(error: $0)) }
+      .handleEvents(receiveCompletion: { [weak self] _ in
+        self?.isLoadingNextPage = false
+      })
+      .eraseToAnyPublisher()
   }
   
-  /// Cancels any in-flight search, resets the loadable state to `.idle`, and clears the search text.
-  func cancel() {
-    cancelTapped.send(())
-    state.state = .idle
-    state.searchText = ""
+  /// Creates a publisher that resets state.
+  private func makeResetPublisher() -> AnyPublisher<Loadable<[GithubUser]>, Never> {
+    resetAll()
+    return Just(.idle).eraseToAnyPublisher()
+  }
+  
+  // MARK: - Helpers
+  
+  /// Returns currently loaded users (if any).
+  private var currentUsers: [GithubUser]? {
+    if case .loaded(let users) = state.results {
+      return users
+    }
+    return nil
+  }
+  
+  /// Indicates whether next page can be loaded.
+  private var canLoadNextPage: Bool {
+    hasMorePages &&
+    !isLoadingNextPage &&
+    currentUsers != nil
+  }
+  
+  /// Resets pagination-related state.
+  private func resetPagination() {
     currentPage = 1
+    hasMorePages = true
+    isLoadingNextPage = false
+  }
+  
+  /// Fully resets ViewModel state.
+  private func resetAll() {
+    resetPagination()
+    state = SearchState()
   }
 }
-

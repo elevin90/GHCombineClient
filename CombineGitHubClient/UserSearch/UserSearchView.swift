@@ -41,13 +41,12 @@ struct UserSearchView: View {
   /// - `.error`: An error placeholder
   @ViewBuilder
   private var content: some View {
-    switch viewModel.state.state {
+    switch viewModel.state.results {
     case .idle:
       EmptyView()
     case .loading(let previousUsers):
       if let users = previousUsers {
         usersList(users: users)
-          .overlay(ProgressView())
       } else {
         ProgressView()
       }
@@ -89,6 +88,9 @@ struct UserSearchView: View {
           }
           .buttonStyle(.plain)
         }
+      }
+      if viewModel.isLoadingNextPage {
+        ProgressView()
       }
     }
     .padding(.top, 12)
