@@ -74,7 +74,6 @@ final class UserSearchViewModel: ObservableObject {
       .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
       .sink { [weak self] text in
         guard let self else { return }
-        
         switch text.count {
         case .zero:
           action.send(.cancel)
@@ -133,11 +132,9 @@ final class UserSearchViewModel: ObservableObject {
     
     resetPagination()
     
-    let previousUsers = currentUsers
-    
     return api.searchUsers(query: query, page: currentPage)
       .map { Loadable.loaded($0) }
-      .prepend(.loading(previousValue: previousUsers))
+      .prepend(.loading)
       .catch { Just(Loadable.error(error: $0)) }
       .eraseToAnyPublisher()
   }
@@ -166,6 +163,7 @@ final class UserSearchViewModel: ObservableObject {
         self.currentPage = nextPage
         return .loaded(existingUsers + newUsers)
       }
+      .receive(on: DispatchQueue.main)
       .catch { Just(Loadable.error(error: $0)) }
       .handleEvents(receiveCompletion: { [weak self] _ in
         self?.isLoadingNextPage = false

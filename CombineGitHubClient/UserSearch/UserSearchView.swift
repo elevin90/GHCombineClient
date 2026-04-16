@@ -9,30 +9,29 @@ import SwiftUI
 
 /// Root view for searching GitHub users. Hosts the search field and renders results based on the view model's loadable state.
 struct UserSearchView: View {
+  enum Constants {
+    static let usersListTopOffset: CGFloat = 18
+    static let userRowCornerRadius: CGFloat = 12
+  }
   /// The view-owned source of truth for search state and side effects.
   /// Use `@StateObject` because this view creates and owns the view model.
   /// If a parent injects a view model instance, prefer `@ObservedObject` instead.
   @StateObject var viewModel = UserSearchViewModel()
-
-    /// Top-level layout: navigation, background, and content reacting to the view model's state.
-    /// The `searchable` modifier binds to `viewModel.state.searchText` to drive the Combine pipeline.
-    var body: some View {
-      NavigationStack {
-        ZStack {
-          VStack(spacing: .zero) {
-            content
-          }
-          .frame(maxHeight: .infinity, alignment: .top)
-        }
+  
+  /// Top-level layout: navigation, background, and content reacting to the view model's state.
+  /// The `searchable` modifier binds to `viewModel.state.searchText` to drive the Combine pipeline.
+  var body: some View {
+    NavigationStack {
+      content
         .navigationTitle("GitHub users")
         .navigationBarTitleDisplayMode(.large)
         .searchable(
           text: $viewModel.state.searchText,
           placement: .navigationBarDrawer,
-          prompt: "Start typing userName... "
+          prompt: "Start typing username... "
         )
-      }
     }
+  }
   
   /// Renders different UI based on the `Loadable` state in `viewModel.state.state`.
   /// - `.idle`: Prompt to start typing
@@ -43,84 +42,104 @@ struct UserSearchView: View {
   private var content: some View {
     switch viewModel.state.results {
     case .idle:
-      EmptyView()
-    case .loading(let previousUsers):
-      if let users = previousUsers {
-        usersList(users: users)
-      } else {
-        ProgressView()
-      }
+      emptyView
+    case .loading:
+      spinnerView
     case .loaded(let users):
-      usersList(users: users)
+      usersList(users)
     case .error(let error):
-      ContentUnavailableView(
-        "Oops",
-        image: "exclamationmark.triangle.fill",
-        description: Text(error.localizedDescription)
-      )
+      errorView(with: error)
+    }
+  }
+  
+  private func errorView(with error: Error) -> some View {
+    ContentUnavailableView(
+      "Oops",
+      image: "exclamationmark.triangle.fill",
+      description: Text(error.localizedDescription)
+    )
+  }
+  
+  private var emptyView: some View {
+    ContentUnavailableView(
+      "Start typing",
+      image: "magnifyingglass",
+      description: Text("Search GitHub users")
+    )
+  }
+  
+  private var spinnerView: some View {
+    VStack {
+      Spacer()
+      ProgressView()
+      Spacer()
     }
   }
   
   /// Displays a list of users with navigation to profile details.
   /// - Parameter users: The users to render.
   @ViewBuilder
-  private func usersList(users: [GithubUser]) ->some View {
+  private func usersList(_ users: [GithubUser]) ->some View {
     ScrollView {
-      LazyVStack(spacing: 12) {
+      LazyVStack(spacing: Constants.usersListTopOffset) {
         ForEach(users) { user in
-          NavigationLink {
-            ProfileDetailsView(
-              userID: user.login,
-              apiService: viewModel.api
-            )
-          } label: {
-            UserRow(user: user)
-              .onAppear {
-                if user == users.last {
-                  viewModel.loadNextPage()
-                }
-              }
-              .padding()
-              .background(
-                RoundedRectangle(cornerRadius: 12)
-                  .fill(Color(.secondarySystemBackground))
-              )
-          }
-          .buttonStyle(.plain)
+          row(for: user)
+            .onAppear {
+              guard user.id == users.last?.id else { return }
+              guard !viewModel.isLoadingNextPage else { return }
+              viewModel.loadNextPage()
+            }
+        }
+        if viewModel.isLoadingNextPage {
+          ProgressView()
         }
       }
-      if viewModel.isLoadingNextPage {
-        ProgressView()
-      }
     }
-    .padding(.top, 12)
+    .padding(.top, Constants.usersListTopOffset)
+  }
+  
+  private func row(for user: GithubUser) -> some View {
+    NavigationLink {
+      ProfileDetailsView(
+        userID: user.login,
+        apiService: viewModel.api
+      )
+    } label: {
+      UserRow(user: user)
+        .padding()
+        .background(
+          RoundedRectangle(cornerRadius: Constants.userRowCornerRadius)
+            .fill(Color(.secondarySystemBackground))
+        )
+    }
+    .buttonStyle(.plain)
   }
 }
 
 // Preview for development and design-time rendering.
 #Preview {
-    UserSearchView()
+  UserSearchView()
 }
 
 /// A single row showing a user's avatar and login.
 struct UserRow: View {
-
-    /// The user model backing this row.
-    let user: GithubUser
-
-    var body: some View {
-        HStack(spacing: 12) {
-          AvatarView(
-            avatarURL: URL(string: user.avatar_url),
-            type: .medium
-          )
-          Text(user.login)
-            .font(.headline)
-          
-          Spacer()
-          
-          Image(systemName: "chevron.right")
-            .foregroundColor(.secondary)
-        }
+  
+  /// The user model backing this row.
+  let user: GithubUser
+  
+  var body: some View {
+    HStack(spacing: 12) {
+      AvatarView(
+        avatarURL: URL(string: user.avatar_url),
+        type: .medium
+      )
+      Text(user.login)
+        .font(.headline)
+      
+      Spacer()
+      
+      Image(systemName: "chevron.right")
+        .foregroundColor(.secondary)
     }
+  }
 }

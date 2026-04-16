@@ -290,7 +290,7 @@ final class GitHubAPIService: APIService {
 
 enum Loadable<Value> {
   case idle
-  case loading(previousValue: Value?)
+  case loading
   case loaded(Value)
   case error(error:Error)
 }

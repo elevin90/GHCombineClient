@@ -28,7 +28,7 @@ final class ProfileDetailsViewModel: ObservableObject {
   }
   
   private func loadProfile(for userId: String) {
-    state.profileState = .loading(previousValue: nil)
+    state.profileState = .loading
     api.getProfile(for: userId)
       .map { Loadable.loaded($0) }
       .catch { error in
@@ -42,7 +42,7 @@ final class ProfileDetailsViewModel: ObservableObject {
   }
   
   func loadRepositories(for userId: String) {
-    state.repositoriesState = .loading(previousValue: nil)
+    state.repositoriesState = .loading
     api.getRepositories(for: userId, page: 1)
       .map { reposies in
         reposies.sorted(by: { $0.stargazersCount > $1.stargazersCount })
@@ -61,7 +61,7 @@ final class ProfileDetailsViewModel: ObservableObject {
   }
   
   func loadFollowers(for userId: String) {
-    state.profileState = .loading(previousValue: nil)
+    state.profileState = .loading
     api.getFollowers(for: userId)
       .map { Loadable.loaded($0) }
       .catch {error in
