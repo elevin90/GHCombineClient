@@ -24,12 +24,21 @@ struct UserSearchView: View {
     NavigationStack {
       content
         .navigationTitle("GitHub users")
+#if !os(macOS)
         .navigationBarTitleDisplayMode(.large)
+#endif
+#if os(macOS)
+        .searchable(
+          text: $viewModel.state.searchText,
+          prompt: "Start typing username... "
+        )
+#else
         .searchable(
           text: $viewModel.state.searchText,
           placement: .navigationBarDrawer,
           prompt: "Start typing username... "
         )
+#endif
     }
   }
   
@@ -52,11 +61,11 @@ struct UserSearchView: View {
     }
   }
   
-  private func errorView(with error: Error) -> some View {
+  private func errorView(with error: Error?) -> some View {
     ContentUnavailableView(
       "Oops",
       image: "exclamationmark.triangle.fill",
-      description: Text(error.localizedDescription)
+      description: Text(error?.localizedDescription ?? "")
     )
   }
   
@@ -84,11 +93,7 @@ struct UserSearchView: View {
       LazyVStack(spacing: Constants.usersListTopOffset) {
         ForEach(users) { user in
           row(for: user)
-            .onAppear {
-              guard user.id == users.last?.id else { return }
-              guard !viewModel.isLoadingNextPage else { return }
-              viewModel.loadNextPage()
-            }
+            .onAppear { viewModel.onItemAppear(user) }
         }
         if viewModel.isLoadingNextPage {
           ProgressView()
@@ -109,7 +114,11 @@ struct UserSearchView: View {
         .padding()
         .background(
           RoundedRectangle(cornerRadius: Constants.userRowCornerRadius)
-            .fill(Color(.secondarySystemBackground))
+#if os(macOS)
+            .fill(Color(nsColor: .windowBackgroundColor))
+#else
+            .fill(Color(uiColor: .secondarySystemBackground))
+#endif
         )
     }
     .buttonStyle(.plain)

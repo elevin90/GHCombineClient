@@ -7,17 +7,16 @@
 
 import Foundation
 import Combine
-
-/// Represents user-driven intents.
-private enum Action {
-  case searchChanged(String)
-  case loadNextPage
-  case cancel
-}
-
 /// ViewModel responsible for searching GitHub users with pagination.
 /// Implements a unidirectional data flow using Combine.
 final class UserSearchViewModel: ObservableObject {
+  /// Represents user-driven intents.
+  private enum Action {
+    case searchChanged(String)
+    case loadNextPage
+    case cancel
+  }
+
   
   // MARK: - Public State
   
@@ -42,6 +41,22 @@ final class UserSearchViewModel: ObservableObject {
   
   /// Current page index (starts from 1)
   private var currentPage = 1
+  private var lastTriggeredPage: Int?
+
+  /// Indicates whether next page can be loaded.
+  private var canLoadNextPage: Bool {
+    hasMorePages &&
+    !isLoadingNextPage &&
+    currentUsers != nil
+  }
+  
+  /// Returns currently loaded users (if any).
+  private var currentUsers: [GithubUser]? {
+    if case .loaded(let users) = state.results {
+      return users
+    }
+    return nil
+  }
   
   /// Indicates if more pages are available
   private var hasMorePages = true
@@ -113,15 +128,16 @@ final class UserSearchViewModel: ObservableObject {
   }
   
   // MARK: - Public API
-  
-  /// Requests loading of the next page (pagination trigger).
-  func loadNextPage() {
-    action.send(.loadNextPage)
-  }
-  
+
   /// Cancels current search and resets state.
   func cancel() {
     action.send(.cancel)
+  }
+  
+  func onItemAppear(_ user: GithubUser) {
+    guard shouldLoadNextPage(currentItem: user) else { return }
+    action.send(.loadNextPage)
+    lastTriggeredPage = currentPage
   }
   
   // MARK: - Publishers
@@ -170,40 +186,44 @@ final class UserSearchViewModel: ObservableObject {
       })
       .eraseToAnyPublisher()
   }
-  
+}
+
+private extension UserSearchViewModel {
   /// Creates a publisher that resets state.
-  private func makeResetPublisher() -> AnyPublisher<Loadable<[GithubUser]>, Never> {
+  func makeResetPublisher() -> AnyPublisher<Loadable<[GithubUser]>, Never> {
     resetAll()
     return Just(.idle).eraseToAnyPublisher()
   }
   
   // MARK: - Helpers
-  
-  /// Returns currently loaded users (if any).
-  private var currentUsers: [GithubUser]? {
-    if case .loaded(let users) = state.results {
-      return users
-    }
-    return nil
-  }
-  
-  /// Indicates whether next page can be loaded.
-  private var canLoadNextPage: Bool {
-    hasMorePages &&
-    !isLoadingNextPage &&
-    currentUsers != nil
-  }
-  
+
   /// Resets pagination-related state.
-  private func resetPagination() {
+  func resetPagination() {
     currentPage = 1
     hasMorePages = true
     isLoadingNextPage = false
   }
   
   /// Fully resets ViewModel state.
-  private func resetAll() {
+  func resetAll() {
     resetPagination()
     state = SearchState()
+  }
+  
+  func shouldLoadNextPage(currentItem: GithubUser) -> Bool {
+    guard let users = currentUsers else { return false }
+    let threshold = max(5, users.count / 4)
+    
+    guard let index = users.firstIndex(where: { $0.id == currentItem.id }) else {
+      return false
+    }
+    
+    guard lastTriggeredPage != currentPage else {
+      return false
+    }
+    
+    let isNearEnd = index >= users.count - threshold
+    
+    return isNearEnd && hasMorePages && !isLoadingNextPage
   }
 }

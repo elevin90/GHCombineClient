@@ -9,7 +9,11 @@ import SwiftUI
 
 struct FollowersListView: View {
   
-  let state: Loadable<[Follower]>
+  private let viewModel: FollowersListViewModel
+  
+  init(state: Loadable<[Follower]>) {
+    self.viewModel = FollowersListViewModel(state: state)
+  }
   
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -19,7 +23,7 @@ struct FollowersListView: View {
   }
   
   private var header: some View {
-    Label("Followers", systemImage: "person.2")
+    Label(viewModel.headerTitle, systemImage: "person.2")
       .font(.callout)
       .foregroundStyle(.secondary)
       .padding(.horizontal)
@@ -27,17 +31,15 @@ struct FollowersListView: View {
   
   @ViewBuilder
   private var content: some View {
-    switch state {
+    switch viewModel.contentState {
     case .idle:
       EmptyView()
-            .padding(.vertical)
+        .padding(.vertical)
     case .loading:
       ProgressView()
         .frame(maxWidth: .infinity)
-      
     case .error:
       Text("Error loading followers")
-      
     case .loaded(let followers):
       if followers.isEmpty {
         emptyView
@@ -65,15 +67,14 @@ struct FollowersListView: View {
     _ followers: [Follower]
   ) -> some View {
     HStack {
-      ForEach(followers.prefix(5), id: \.id) { follower in
-        Spacer()
+      ForEach(followers, id: \.id) { follower in
         renderFollower(follower)
-        Spacer()
+        Spacer().frame(width: 24)
       }
-      Spacer()
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.vertical)
+    .padding(.leading, 24)
   }
   
   @ViewBuilder

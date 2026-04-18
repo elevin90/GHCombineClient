@@ -292,7 +292,7 @@ enum Loadable<Value> {
   case idle
   case loading
   case loaded(Value)
-  case error(error:Error)
+  case error(error: Error?)
 }
 
 struct SearchState {

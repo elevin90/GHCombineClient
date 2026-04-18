@@ -168,7 +168,7 @@ private struct RepositoryCellView: View {
   /// Card background appearance.
   private var background: some View {
     RoundedRectangle(cornerRadius: 16)
-      .fill(Color(uiColor: .systemBackground))
+      .fill(.background)
   }
   
   /// Subtle card border to separate from the background.

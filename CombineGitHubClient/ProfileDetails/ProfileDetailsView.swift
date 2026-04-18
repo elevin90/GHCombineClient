@@ -89,7 +89,7 @@ struct ProfileDetailsView: View {
       }
     }
     .toolbar {
-      ToolbarItem(placement: .navigationBarTrailing) {
+      ToolbarItem(placement: .primaryAction) {
         Button {
           // TODO: Add share
         } label: {
@@ -98,7 +98,9 @@ struct ProfileDetailsView: View {
       }
     }
     .navigationTitle("Profile")
+#if os(iOS)
     .navigationBarTitleDisplayMode(.inline)
+#endif
   }
   
   @ViewBuilder
@@ -131,7 +133,7 @@ struct ProfileDetailsView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(
       RoundedRectangle(cornerRadius: 12)
-        .fill(Color(uiColor: .systemBackground))
+        .fill(.background)
         .shadow(radius: 4)
       
     )

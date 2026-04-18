@@ -84,7 +84,7 @@ struct ErrorView: View {
       .frame(maxWidth: .infinity)
       .background(
         RoundedRectangle(cornerRadius: 16)
-          .fill(Color(uiColor: .systemGray5))
+          .fill(Color.gray.opacity(0.15))
           .shadow(radius: 2)
       )
       .overlay(
